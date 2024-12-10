@@ -1,7 +1,7 @@
 using RiskService from './risk-service';
 
 annotate RiskService.Risks with {
-	title       @title: 'Title';
+	title       @title: 'Title2';
 	prio        @title: 'Priority';
 	descr       @title: 'Description';
 	miti        @title: 'Mitigation';
