@@ -1,0 +1,157 @@
+_schema-version: 3.3.0
+ID: cpapp68
+description: A simple CAP project.
+version: 1.0.0
+modules:
+  - name: cpapp68-srv
+    type: nodejs
+    path: gen/srv
+    requires:
+      - name: cpapp68-db
+      - name: uaa_cpapp68
+      - name: cpapp68-connectivity
+      - name: cpapp68-destination-service
+    provides:
+      - name: srv-api
+        properties:
+          srv-url: ${default-url}
+    parameters:
+      buildpack: nodejs_buildpack
+      readiness-health-check-http-endpoint: /health
+      readiness-health-check-type: http
+    build-parameters:
+      builder: npm
+  - name: cpapp68-db-deployer
+    type: hdb
+    path: gen/db
+    requires:
+      - name: cpapp68-db
+    parameters:
+      buildpack: nodejs_buildpack
+  - name: cpapp68-destination-content
+    type: com.sap.application.content
+    requires:
+      - name: cpapp68-destination-service
+        parameters:
+          content-target: true
+      - name: cpapp68_html_repo_host
+        parameters:
+          service-key:
+            name: cpapp68_html_repo_host-key
+      - name: uaa_cpapp68
+        parameters:
+          service-key:
+            name: uaa_cpapp68-key
+    parameters:
+      content:
+        instance:
+          destinations:
+            - Name: zcappapp68_cpapp68_html_repo_host
+              ServiceInstanceName: cpapp68-html5-app-host-service
+              ServiceKeyName: cpapp68_html_repo_host-key
+              sap.cloud.service: zcappapp68
+            - Authentication: OAuth2UserTokenExchange
+              Name: zcappapp68_uaa_cpapp68
+              ServiceInstanceName: cpapp68-xsuaa-service
+              ServiceKeyName: uaa_cpapp68-key
+              sap.cloud.service: zcappapp68
+          existing_destinations_policy: ignore
+    build-parameters:
+      no-source: true
+  - name: cpapp68-app-content
+    type: com.sap.application.content
+    path: .
+    requires:
+      - name: cpapp68_html_repo_host
+        parameters:
+          content-target: true
+    build-parameters:
+      build-result: resources
+      requires:
+        - artifacts:
+            - riskui68.zip
+          name: riskui68
+          target-path: resources/
+  - name: riskui68
+    type: html5
+    path: app/riskui68
+    build-parameters:
+      build-result: dist
+      builder: custom
+      commands:
+        - npm install
+        - npm run build:cf
+      supported-platforms:
+        []
+resources:
+  - name: cpapp68-db
+    type: com.sap.xs.hdi-container
+    parameters:
+      service: hana
+      service-plan: hdi-shared
+  - name: cpapp68-destination-service
+    type: org.cloudfoundry.managed-service
+    parameters:
+      config:
+        HTML5Runtime_enabled: true
+        init_data:
+          instance:
+            destinations:
+              - Authentication: NoAuthentication
+                Name: ui5
+                ProxyType: Internet
+                Type: HTTP
+                URL: https://ui5.sap.com
+              - Authentication: NoAuthentication
+                HTML5.DynamicDestination: true
+                HTML5.ForwardAuthToken: true
+                Name: cpapp68-srv-api
+                ProxyType: Internet
+                Type: HTTP
+                URL: ~{srv-api/srv-url}
+            existing_destinations_policy: update
+        version: 1.0.0
+      service: destination
+      service-name: cpapp68-destination-service
+      service-plan: lite
+    requires:
+      - name: srv-api
+  - name: cpapp68-connectivity
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: connectivity
+      service-plan: lite    
+  - name: cpapp68_html_repo_host
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-name: cpapp68-html5-app-host-service
+      service-plan: app-host
+  - name: uaa_cpapp68
+    type: org.cloudfoundry.managed-service
+    parameters:
+      config:
+        tenant-mode: dedicated
+        xsappname: cpapp68-${org}-${space}
+        role-collections:
+         - name: 'RiskManager-${space}'
+           description: ManageRisks
+           role-template-references:
+           - $XSAPPNAME.RiskManager
+         - name: 'RiskViewer-${space}'
+           description: View Risk
+           role-template-references:
+           - $XSAPPNAME.RiskViewer
+      path: ./xs-security.json
+      service: xsuaa
+      service-name: cpapp68-xsuaa-service
+      service-plan: application
+parameters:
+  deploy_mode: html5-repo
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm ci
+        - npx cds build --production
