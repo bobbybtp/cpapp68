@@ -142,7 +142,7 @@ annotate RiskService.Suppliers with {
         title: 'ID',
         Common.Text: fullName
     );
-    fullName    @title: 'Name';
+    fullName    @title: 'Names';
 }
 
 annotate RiskService.Suppliers with @Capabilities.SearchRestrictions.Searchable : false;
